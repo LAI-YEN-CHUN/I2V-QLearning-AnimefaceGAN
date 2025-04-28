@@ -2,11 +2,12 @@
 
 ## Setup
 
-To set up the environment, follow these steps:
+To set up the environment using Docker, follow these steps:
 ```bash
 git clone --recursive https://github.com/LAI-YEN-CHUN/I2V-QLearning-AnimefaceGAN.git
-conda create animeface-gan python=3.12
-pip install -r requirements.txt
+cd I2V-QLearning-AnimefaceGAN
+docker-compose build
+docker-compose up -d
 ```
 
 ## References

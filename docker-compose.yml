@@ -1,0 +1,17 @@
+# Build:
+# docker-compose build
+# Run:
+# docker-compose up -d
+services:
+  i2v-qlearning-animefacegan:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: cuda-quantum:latest
+    runtime: nvidia
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=all
+    volumes:
+      - .:/workspace
+    tty: true
