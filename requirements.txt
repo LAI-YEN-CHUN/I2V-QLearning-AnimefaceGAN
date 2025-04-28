@@ -1,0 +1,15 @@
+# Illustration2Vec Requirements
+pillow
+chainer
+scikit-image
+# Jupyter Notebook Requirements
+ipyparams
+notebook
+ipywidgets
+pylatexenc
+# kagglehub Requirements
+kagglehub
+# Others
+matplotlib
+seaborn
+tqdm
