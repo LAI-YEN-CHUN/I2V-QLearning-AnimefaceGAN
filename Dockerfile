@@ -4,6 +4,9 @@ FROM nvcr.io/nvidia/pytorch:24.11-py3
 WORKDIR /workspace
 COPY . .
 
+# Set the environment variable to avoid cross-platform git autocrlf issues
+RUN git config core.autocrlf input
+
 # Install the required packages
 RUN pip install --upgrade pip
 RUN pip install notebook ipywidgets pylatexenc
