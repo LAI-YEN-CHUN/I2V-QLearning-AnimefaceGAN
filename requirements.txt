@@ -1,7 +1,8 @@
 # Illustration2Vec Requirements
+numpy # numpy.distutils is deprecated, and will be removed for Python >= 3.12 (https://stackoverflow.com/questions/70583969/pyinstaller-no-module-named-numpy-distutils)
 pillow
-chainer
 scikit-image
+chainer>=2.0.0
 # Jupyter Notebook Requirements
 ipyparams
 notebook

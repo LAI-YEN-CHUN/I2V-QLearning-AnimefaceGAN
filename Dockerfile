@@ -1,5 +1,6 @@
 # Use the official NVIDIA PyTorch image as a base
-FROM nvcr.io/nvidia/pytorch:24.11-py3
+FROM nvcr.io/nvidia/pytorch:23.12-py3
+
 # Set the working directory
 WORKDIR /workspace
 COPY . .
