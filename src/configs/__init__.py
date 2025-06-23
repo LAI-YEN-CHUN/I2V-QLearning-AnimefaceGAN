@@ -1,5 +1,6 @@
 # Configuration factory for dataset preprocessing and model paths
 import os
+from itertools import product
 
 import torch
 
@@ -9,19 +10,25 @@ class BaseConfig:
     Base configuration class for all global constants and paths.
     """
 
-    def __init__(self):
+    def __init__(self, model_name: str | None = None):
         # Root directory of the project
         self.ROOT_DIR = os.path.abspath(
             os.path.join(os.path.dirname(__file__), '../../')
         )
         self.DATA_DIR = os.path.join(self.ROOT_DIR, 'data')
-        self.RESULTS_DIR = os.path.join(self.ROOT_DIR, 'results')
         self.I2V_MODULE_DIR = os.path.join(
             self.ROOT_DIR, 'src/illustration2vec')
+
+        if model_name is None:
+            self.RESULTS_DIR = os.path.join(self.ROOT_DIR, 'results')
+        else:
+            self.RESULTS_DIR = os.path.join(
+                self.ROOT_DIR, 'results', model_name)
+        self.METRICS_DIR = os.path.join(self.RESULTS_DIR, 'metrics')
         self.FID_REAL_IMAGES_DIR = os.path.join(
-            self.RESULTS_DIR, 'metrics/real_images')
+            self.METRICS_DIR, 'real_images')
         self.FID_FAKE_IMAGES_DIR = os.path.join(
-            self.RESULTS_DIR, 'metrics/fake_images')
+            self.METRICS_DIR, 'fake_images')
 
         # Dataset directories
         self.RAW_DATA_DIR = os.path.join(self.DATA_DIR, 'raw')
@@ -90,8 +97,6 @@ class BaseConfig:
         self.BATCH_SIZE = 128
         self.EPOCHES = 100
         self.CRITICS = 1
-        # self.ADAM_BETA_1 = 0.5
-        # self.ADAM_BETA_2 = 0.5
         self.LAMBDA_CLASS = 1.0
         self.LAMBDA_GP = 10.0
         self.NUM_TEST_IMAGES = 10000
@@ -99,7 +104,18 @@ class BaseConfig:
         self.SAMPLE_INTERVAL = 1
         self.MODEL_SAVE_INTERVAL = 10
 
-        # Initialization Hyperparameters
-        self.INIT_LEARNING_RATE = 0.001
-        self.INIT_MOMENTUM = 0.9
-        self.INIT_WEIGHT_DECAY = 0.0005
+        # Hyperparameter tuning lists
+        self.LEARNING_RATE_LIST = [0.01, 0.001, 0.0001]
+        self.MOMENTUM_LIST = [0, 0.9]
+        self.WEIGHT_DECAY_LIST = [0, 1e-3, 1e-4]
+
+        # Initialize with the first set of hyperparameters
+        self.LEARNING_RATE = self.LEARNING_RATE_LIST[0]
+        self.MOMENTUM = self.MOMENTUM_LIST[0]
+        self.WEIGHT_DECAY = self.WEIGHT_DECAY_LIST[0]
+
+        # Q-Learning hyperparameters
+        self.ALPHA = 0.1  # Q-table learning rate
+        self.GAMMA = 0.9  # Discount factor for future rewards
+        self.EPSILON = 0.5  # Exploration rate for epsilon-greedy policy
+        self.Q_EPISODES = 5

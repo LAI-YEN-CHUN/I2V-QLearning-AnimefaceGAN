@@ -1,11 +1,13 @@
 
 import glob
 import os
+import shutil
 import time
 
 import cv2
 import torch
 from pytorch_fid import fid_score
+from sklearn.model_selection import train_test_split
 from torch.utils.data import DataLoader
 from torchvision import transforms
 from tqdm import tqdm
@@ -13,7 +15,7 @@ from tqdm import tqdm
 import datasets
 import models
 from configs import BaseConfig
-from utils.utils import initialize_directories, set_random_seed
+from utils.utils import set_random_seed
 from utils.visualizer import plot_gan_losses
 
 
@@ -25,12 +27,16 @@ def train_model(cfg: BaseConfig, model: models.WACGAN, dataloader: DataLoader) -
     print(f'Training time: {training_time:.2f} seconds')
 
     # Save the losses to the log files
+    if not os.path.exists(cfg.LOGS_DIR):
+        os.makedirs(cfg.LOGS_DIR, exist_ok=True)
     with open(os.path.join(cfg.LOGS_DIR, 'loss_G.csv'), 'w') as f:
         f.write(','.join(map(str, avg_loss_G_list)))
     with open(os.path.join(cfg.LOGS_DIR, 'loss_D.csv'), 'w') as f:
         f.write(','.join(map(str, avg_loss_D_list)))
 
     # Visualize the losses
+    if not os.path.exists(cfg.FIGURES_DIR):
+        os.makedirs(cfg.FIGURES_DIR, exist_ok=True)
     loss_curve_save_path = os.path.join(
         cfg.FIGURES_DIR, 'loss_curve.png')
     plot_gan_losses(avg_loss_G_list, avg_loss_D_list, loss_curve_save_path)
@@ -40,8 +46,7 @@ def load_generator(cfg: BaseConfig) -> torch.nn.Module:
     # Load the latest model checkpoint
     checkpoints = glob.glob(os.path.join(
         cfg.GENERATOR_CHECKPOINTS_DIR, "*.pth"))
-    print(
-        f"Found {len(checkpoints)} checkpoints in {cfg.GENERATOR_CHECKPOINTS_DIR}")
+
     sorted_checkpoints = sorted(
         checkpoints, key=lambda x: int(x.split("_")[-1].split(".")[0])
     )
@@ -58,12 +63,16 @@ def load_generator(cfg: BaseConfig) -> torch.nn.Module:
 
 
 def compute_fid(real_dataset_dir: str, fake_dataset_dir: str, batch_size: int, device: str):
-    fid_value = fid_score.calculate_fid_given_paths(
-        [real_dataset_dir, fake_dataset_dir],
-        batch_size,
-        device,
-        dims=2048
-    )
+    try:
+        fid_value = fid_score.calculate_fid_given_paths(
+            [real_dataset_dir, fake_dataset_dir],
+            batch_size,
+            device,
+            dims=2048
+        )
+    except Exception as e:
+        print(f"Error calculating FID: {e}")
+        fid_value = float('inf')
     return fid_value
 
 
@@ -74,8 +83,9 @@ def generate_fake_images(cfg: BaseConfig, generator: torch.nn.Module, fake_y: to
         fake_images = generator(z, fake_y)
 
     # Save the generated images
+    print(f"Saving fake images to {cfg.FID_FAKE_IMAGES_DIR}...")
     os.makedirs(cfg.FID_FAKE_IMAGES_DIR, exist_ok=True)
-    for i, img in enumerate(fake_images):
+    for i, img in tqdm(enumerate(fake_images), total=fake_images.shape[0]):
         img_path = os.path.join(
             cfg.FID_FAKE_IMAGES_DIR, f"fake_image_{i}.png")
         img = (img + 1) / 2  # Normalize to [0, 1]
@@ -105,19 +115,45 @@ def copy_real_images(data_loader: DataLoader, target_dir: str) -> None:
             cv2.imwrite(dst_path, cv2.cvtColor(image, cv2.COLOR_RGB2BGR))
 
 
+def evaluate_model(cfg: BaseConfig, dataloader: DataLoader) -> None:
+    # Load the generator model
+    generator = load_generator(cfg)
+
+    # Collect all tags from the test loader
+    fake_y = torch.cat([tags for _, tags in dataloader], dim=0).to(cfg.DEVICE)
+
+    # Copy the real images to the FID directory
+    copy_real_images(dataloader, cfg.FID_REAL_IMAGES_DIR)
+
+    # Generate fake images
+    generate_fake_images(cfg, generator, fake_y)
+
+    # Evaluate the model
+    fid_value = compute_fid(
+        cfg.FID_REAL_IMAGES_DIR, cfg.FID_FAKE_IMAGES_DIR, cfg.BATCH_SIZE, cfg.DEVICE)
+
+    # Save the FID score to a file
+    if not os.path.exists(cfg.METRICS_DIR):
+        os.makedirs(cfg.METRICS_DIR, exist_ok=True)
+    with open(os.path.join(cfg.METRICS_DIR, 'fid_score.txt'), 'w') as f:
+        f.write(f"FID score: {fid_value:.4f}\n")
+
+    return fid_value
+
+
 def main() -> None:
-    cfg = BaseConfig()
+    cfg = BaseConfig(model_name=None)
     set_random_seed(cfg.RANDOM_SEED)
-    initialize_directories(cfg)
 
     print(f"Using device: {cfg.DEVICE}")
 
     filenames, tags = datasets.prepare_anime_face_data(cfg)
-    print(f"Total images: {len(filenames)}")
+    print(f"Total images: {len(filenames)}, shape: {filenames.shape}")
+    print(f"Total tags: {len(tags)}, shape: {tags.shape}")
 
-    x_train, x_test = filenames[:-cfg.NUM_TEST_IMAGES], \
-        filenames[-cfg.NUM_TEST_IMAGES:]
-    y_train, y_test = tags[:-cfg.NUM_TEST_IMAGES], tags[-cfg.NUM_TEST_IMAGES:]
+    x_train, x_test, y_train, y_test = train_test_split(
+        filenames, tags, test_size=cfg.NUM_TEST_IMAGES, random_state=cfg.RANDOM_SEED
+    )
 
     print(f"Training images: {len(x_train)}, Testing images: {len(x_test)}")
     print(f"Training tags: {len(y_train)}, Testing tags: {len(y_test)}")
@@ -146,37 +182,94 @@ def main() -> None:
     test_loader = DataLoader(test_dataset, cfg.BATCH_SIZE,
                              shuffle=False, drop_last=False)
 
-    model = models.WACGAN(cfg)
+    # Remove existing results directory and create a new one
+    if os.path.exists(cfg.RESULTS_DIR):
+        print(f"Removing existing results directory: {cfg.RESULTS_DIR}...")
+        shutil.rmtree(cfg.RESULTS_DIR)
+    os.makedirs(cfg.RESULTS_DIR, exist_ok=True)
 
-    # Train the model
-    print("Starting training...")
-    train_model(cfg, model, train_loader)
-    print("Training completed.")
+    print("Starting Q-Learning...")
+    action2episode = dict()
+    agent = models.QAgent(cfg)
 
-    # Load the generator model
-    print("Loading the generator model...")
-    generator = load_generator(cfg)
-    print("Generator model loaded.")
+    for episode in range(cfg.Q_EPISODES):
+        print(f"\n----- Episode {episode + 1} -----")
+        model_name = f'WACGAN_{episode + 1}'
+        cfg = BaseConfig(model_name=model_name)
 
-    # Collect all tags from the test loader
-    fake_y = torch.cat([tags for _, tags in test_loader], dim=0).to(cfg.DEVICE)
-    print(f"Collected {fake_y.shape[0]} tags for fake image generation.")
+        state = agent.get_state()
+        action = agent.select_action(state)
 
-    # Copy the real images to the FID directory
-    print("Copying real images...")
-    copy_real_images(test_loader, cfg.FID_REAL_IMAGES_DIR)
-    print("Real images copied.")
+        if action is None:
+            print("No available actions. Skipping episode.")
+            continue
 
-    # Generate fake images
-    print("Generating fake images...")
-    generate_fake_images(cfg, generator, fake_y)
-    print("Fake images generated.")
+        # Record the action and its corresponding episode
+        action2episode[action] = episode
+        print(f"Selected action: {action}")
 
-    # Evaluate the model
-    print("Computing FID score...")
-    fid_value = compute_fid(
-        cfg.FID_REAL_IMAGES_DIR, cfg.FID_FAKE_IMAGES_DIR, cfg.BATCH_SIZE, cfg.DEVICE)
-    print(f"FID score: {fid_value}")
+        # Update the configuration with the selected action for training model
+        cfg.LEARNING_RATE, cfg.MOMENTUM, cfg.WEIGHT_DECAY = action
+
+        # Save the hyperparameters for the current episode
+        if not os.path.exists(cfg.RESULTS_DIR):
+            os.makedirs(cfg.RESULTS_DIR, exist_ok=True)
+        with open(os.path.join(cfg.RESULTS_DIR, 'hyperparameters.txt'), 'w') as f:
+            f.write(f"Episode: {episode + 1}\n")
+            f.write(f"Learning Rate: {cfg.LEARNING_RATE}\n")
+            f.write(f"Momentum: {cfg.MOMENTUM}\n")
+            f.write(f"Weight Decay: {cfg.WEIGHT_DECAY}\n")
+
+        # Initialize the model with the selected hyperparameters
+        model = models.WACGAN(cfg)
+
+        print("Training the model...")
+        train_model(cfg, model, train_loader)
+
+        print("Evaluating the model...")
+        fid_value = evaluate_model(cfg, test_loader)
+        print(f"FID score for episode {episode + 1}: {fid_value:.4f}")
+
+        reward = -fid_value
+
+        # Get the next state (The stateless agent does not change state)
+        next_state = agent.get_state()
+
+        # If the reward is finite, update the Q-table
+        if reward != float('-inf'):
+            agent.update_q(state, action, reward, next_state)
+
+    print("Q-Learning completed.\n")
+
+    # Print the final Q-table
+    print("Final Q-table:")
+    for state, actions in agent.q_table.items():
+        print(f"State: {state}")
+        for action, value in actions.items():
+            print(f"  Action: {action}, Q-value: {value:.4f}")
+
+    # Find the best action
+    best_action = None
+    best_value = float('-inf')
+    for state, actions in agent.q_table.items():
+        for action, value in actions.items():
+            if value > best_value:
+                best_value = value
+                best_action = action
+
+    if best_action is None:
+        print("No best action found. Exiting.")
+        return
+
+    best_episode = action2episode[best_action]
+    best_model_name = f'WACGAN_{best_episode + 1}'
+    print(f"Best action: {best_action} from episode {best_episode + 1}")
+    print(f"Best model name: {best_model_name}")
+    print(
+        f"Best hyperparameters: Learning Rate: {best_action[0]}, Momentum: {best_action[1]}, Weight Decay: {best_action[2]}")
+
+    # Load the best model configuration
+    cfg = BaseConfig(model_name=best_model_name)
 
 
 if __name__ == '__main__':

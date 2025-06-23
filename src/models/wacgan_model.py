@@ -126,15 +126,15 @@ class WACGAN():
 
         self.optimizer_G = torch.optim.RMSprop(
             self.generator.parameters(),
-            lr=cfg.INIT_LEARNING_RATE,
-            # weight_decay=cfg.INIT_WEIGHT_DECAY,
-            # momentum=cfg.INIT_MOMENTUM
+            lr=cfg.LEARNING_RATE,
+            momentum=cfg.MOMENTUM,
+            weight_decay=cfg.WEIGHT_DECAY
         )
         self.optimizer_D = torch.optim.RMSprop(
             self.discriminator.parameters(),
-            lr=cfg.INIT_LEARNING_RATE,
-            # weight_decay=cfg.INIT_WEIGHT_DECAY,
-            # momentum=cfg.INIT_MOMENTUM
+            lr=cfg.LEARNING_RATE,
+            momentum=cfg.MOMENTUM,
+            weight_decay=cfg.WEIGHT_DECAY
         )
 
     def fit(self, data_loader: DataLoader) -> Tuple[List[float], List[float]]:
@@ -219,6 +219,16 @@ class WACGAN():
             avg_loss_D = total_loss_D / data_count
             avg_loss_G_list.append(avg_loss_G)
             avg_loss_D_list.append(avg_loss_D)
+
+            # Ensure the directories for saving checkpoints and samples exist
+            if not os.path.exists(self.cfg.GENERATOR_CHECKPOINTS_DIR):
+                os.makedirs(self.cfg.GENERATOR_CHECKPOINTS_DIR,
+                            exist_ok=True)
+            if not os.path.exists(self.cfg.DISCRIMINATOR_CHECKPOINTS_DIR):
+                os.makedirs(
+                    self.cfg.DISCRIMINATOR_CHECKPOINTS_DIR, exist_ok=True)
+            if not os.path.exists(self.cfg.SAMPLES_DIR):
+                os.makedirs(self.cfg.SAMPLES_DIR, exist_ok=True)
 
             # Save the model checkpoints
             if (epoch + 1) % self.cfg.MODEL_SAVE_INTERVAL == 0 or epoch == self.cfg.EPOCHES - 1:

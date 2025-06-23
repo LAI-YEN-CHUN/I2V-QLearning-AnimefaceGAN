@@ -164,8 +164,6 @@ def prepare_anime_face_data(cfg: BaseConfig, num_images: None | int = None) -> t
 
     # Load the labels CSV file
     labels_df = pd.read_csv(cfg.LABELS_CSV)
-    print(f'Labels DataFrame shape: {labels_df.shape}')
-    print(f"Labels DataFrame sample:\n{labels_df.head()}")
 
     # Extract filenames and tags from DataFrame
     # DataFrame structure: [filename, tag1, tag2, ...]

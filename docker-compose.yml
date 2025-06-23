@@ -7,7 +7,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: cuda-quantum:latest
+    image: i2v-qlearning-animefacegan:latest
     runtime: nvidia
     environment:
       - NVIDIA_VISIBLE_DEVICES=all

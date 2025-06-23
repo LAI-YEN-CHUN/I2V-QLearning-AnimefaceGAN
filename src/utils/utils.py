@@ -1,10 +1,6 @@
-import os
-import shutil
 from typing import List, Optional
 
 import torch
-
-from configs import BaseConfig
 
 
 def set_random_seed(seed: int) -> None:
@@ -52,30 +48,3 @@ def is_allowed_file(filename: str, allowed_extensions: Optional[List[str]] = Non
     if allowed_extensions is None:
         allowed_extensions = ['jpg', 'jpeg', 'png']
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in allowed_extensions
-
-
-def initialize_directories(cfg: BaseConfig) -> None:
-    """
-    Create all necessary directories if they do not exist.
-    """
-    # Remove existing results directory if it exists
-    if os.path.exists(cfg.RESULTS_DIR):
-        shutil.rmtree(cfg.RESULTS_DIR)
-
-    # Create the all necessary directories
-    directories = [
-        cfg.RAW_DATA_DIR,
-        cfg.RAW_IMAGES_DIR,
-        cfg.PROCESSED_DATA_DIR,
-        cfg.PROCESSED_IMAGES_DIR,
-        cfg.GENERATOR_CHECKPOINTS_DIR,
-        cfg.DISCRIMINATOR_CHECKPOINTS_DIR,
-        cfg.SAMPLES_DIR,
-        cfg.LOGS_DIR,
-        cfg.FIGURES_DIR,
-        cfg.FID_REAL_IMAGES_DIR,
-        cfg.FID_FAKE_IMAGES_DIR
-    ]
-
-    for directory in directories:
-        os.makedirs(directory, exist_ok=True)
